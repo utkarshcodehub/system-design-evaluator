@@ -11,6 +11,16 @@ client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 class IdeaInput(BaseModel):
     idea: str
 
+def clean_newlines(obj):
+    """Recursively convert literal escaped newline sequences (\\n) to real newline characters."""
+    if isinstance(obj, str):
+        return obj.replace('\\r\\n', '\n').replace('\\n', '\n').replace('\\r', '\n').replace('\\t', '\t')
+    elif isinstance(obj, dict):
+        return {k: clean_newlines(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [clean_newlines(v) for v in obj]
+    return obj
+
 def extract_json(text: str):
     # Strip markdown fences
     text = re.sub(r"```(?:json)?", "", text).strip()
@@ -27,8 +37,15 @@ def extract_json(text: str):
             depth -= 1
             if depth == 0:
                 raw = text[start:i+1]
-                # Replace literal control characters inside JSON strings
-                # LLMs sometimes emit raw \n inside string values instead of \\n
+                # First try standard JSON loading
+                try:
+                    data = json.loads(raw)
+                    return clean_newlines(data)
+                except Exception:
+                    pass
+
+                # If failed, sanitize literal control characters inside JSON strings
+                # LLMs sometimes emit raw control characters inside string values
                 sanitized = re.sub(
                     r'"((?:[^"\\]|\\.)*)"',
                     lambda m: '"' + m.group(1)
@@ -39,21 +56,21 @@ def extract_json(text: str):
                     raw,
                     flags=re.DOTALL
                 )
-                return json.loads(sanitized)
+                data = json.loads(sanitized)
+                return clean_newlines(data)
     raise ValueError("Unclosed JSON object in response")
 
 SYSTEM_PROMPT = """You are a senior staff engineer and system design expert.
 You MUST respond with ONLY a valid JSON object.
 CRITICAL RULES for the JSON:
-- No markdown, no backticks, no text before or after the JSON
-- All string values must use \\n for newlines, never literal newlines inside strings
-- The response must be parseable by Python's json.loads() directly"""
+- No markdown formatting, backticks, or text before or after the JSON (NO ``` or ```json).
+- The response must be valid JSON parseable by Python's json.loads() directly."""
 
 GENERATE_PROMPT = """A user has described a project idea. Generate a thorough, senior-level system design.
 
 Project idea: {idea}
 
-Return this exact JSON with detailed content in each field. Each field value must be a single string with \\n used for line breaks (never literal newlines):
+Return this exact JSON structure with rich, senior-level content in each field. Format sections with clear headings and bullet points:
 {{
   "title": "short descriptive title for this system design",
   "requirements": "FUNCTIONAL REQUIREMENTS:\\n- [requirement 1]\\n- [requirement 2]\\n\\nNON-FUNCTIONAL REQUIREMENTS:\\n- Scale: [target]\\n- Latency: [SLA]\\n- Availability: [target]\\n\\nOUT OF SCOPE:\\n- [item]",
@@ -71,7 +88,7 @@ async def generate_design(data: IdeaInput):
     prompt = GENERATE_PROMPT.format(idea=data.idea.strip())
     try:
         resp = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user",   "content": prompt},

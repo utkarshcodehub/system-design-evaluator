@@ -17,6 +17,11 @@ const EXAMPLES = [
   'A hyperlocal job board for blue-collar workers in India',
 ]
 
+const formatText = (text) => {
+  if (typeof text !== 'string') return text
+  return text.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\\t/g, '\t')
+}
+
 export default function GeneratePanel({ onEvaluateDesign }) {
   const [idea, setIdea]       = useState('')
   const [result, setResult]   = useState(null)
@@ -149,11 +154,11 @@ export default function GeneratePanel({ onEvaluateDesign }) {
               onClick={() => onEvaluateDesign({
                 problem: result.title,
                 design: {
-                  requirements: result.requirements,
-                  capacity:     result.capacity,
-                  high_level:   result.high_level,
-                  deep_dive:    result.deep_dive,
-                  tradeoffs:    result.tradeoffs,
+                  requirements: formatText(result.requirements),
+                  capacity:     formatText(result.capacity),
+                  high_level:   formatText(result.high_level),
+                  deep_dive:    formatText(result.deep_dive),
+                  tradeoffs:    formatText(result.tradeoffs),
                 }
               })}
               className="px-5 py-2.5 bg-amber text-ink text-sm font-body font-semibold
@@ -174,7 +179,7 @@ export default function GeneratePanel({ onEvaluateDesign }) {
                     <h3 className="font-body font-semibold text-ink text-sm">{meta.label}</h3>
                   </div>
                   <p className="font-body text-sm text-ink leading-relaxed whitespace-pre-line">
-                    {result[key]}
+                    {formatText(result[key])}
                   </p>
                 </div>
               )
@@ -192,11 +197,11 @@ export default function GeneratePanel({ onEvaluateDesign }) {
               onClick={() => onEvaluateDesign({
                 problem: result.title,
                 design: {
-                  requirements: result.requirements,
-                  capacity:     result.capacity,
-                  high_level:   result.high_level,
-                  deep_dive:    result.deep_dive,
-                  tradeoffs:    result.tradeoffs,
+                  requirements: formatText(result.requirements),
+                  capacity:     formatText(result.capacity),
+                  high_level:   formatText(result.high_level),
+                  deep_dive:    formatText(result.deep_dive),
+                  tradeoffs:    formatText(result.tradeoffs),
                 }
               })}
               className="px-8 py-2.5 bg-ink text-cream text-sm font-body font-medium

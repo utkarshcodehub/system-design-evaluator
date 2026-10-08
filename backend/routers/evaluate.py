@@ -39,22 +39,46 @@ def extract_json(text: str):
                     return json.loads(text[start:i+1])
     raise ValueError(f"No valid JSON found in response: {text[:300]}")
 
-SYSTEM_PROMPT = """You are a senior staff engineer conducting system design interviews.
-You MUST respond with ONLY a valid JSON object — no markdown, no backticks, no explanation, no preamble.
-The response must be parseable by Python's json.loads() directly."""
+SYSTEM_PROMPT = """You are a Senior Staff Software Engineer conducting a rigorous system design interview evaluation.
+Your response MUST be strict, raw JSON matching the requested schema.
+Rules:
+- Do NOT wrap output in markdown code blocks (NO ``` or ```json).
+- Do NOT output preamble, intro, or concluding text.
+- Do NOT output extra fields outside the schema.
+- The output must pass json.loads() directly without cleaning."""
 
-EVAL_PROMPT = """Evaluate this system design interview response for: {problem}
+EVAL_PROMPT = """Evaluate the following system design submission for the problem: "{problem}".
 
-CANDIDATE'S DESIGN:
-Requirements Clarification: {requirements}
-Capacity Estimation: {capacity}
-High-Level Design: {high_level}
-Deep Dive (DB schema, APIs, components): {deep_dive}
-Bottlenecks & Trade-offs: {tradeoffs}
+CANDIDATE SUBMISSION:
+1. Requirements Clarification:
+{requirements}
 
-Score each section 1-10 and write a 2-3 sentence comment. Give an overall band: Junior / Mid / Senior / Staff.
+2. Capacity Estimation:
+{capacity}
 
-Return this exact JSON structure:
+3. High-Level Design:
+{high_level}
+
+4. Deep Dive (DB schema, APIs, components):
+{deep_dive}
+
+5. Bottlenecks & Trade-offs:
+{tradeoffs}
+
+EVALUATION CRITERIA (1-10):
+- 1-3 (Junior): Vague, missing core non-functional requirements, back-of-envelope math errors, missing single points of failure.
+- 4-6 (Mid-Level): Standard architecture, decent estimates, basic schema/APIs, but lacks concrete scaling mechanics or thorough trade-off analysis.
+- 7-8 (Senior): Strong schema design, accurate capacity calculations, realistic API design, proactive identification of bottlenecks (caching, partitioning, queues).
+- 9-10 (Staff): Exceptional clarity, highly actionable schema/API specs, addresses edge cases, fault tolerance, data consistency (CAP/BASE), and cost/operational trade-offs.
+
+INSTRUCTIONS:
+1. Score each of the 5 sections from 1 to 10.
+2. Provide a concise 2-3 sentence technical feedback comment per section.
+3. Calculate 'overall_score' as the average of the 5 section scores (rounded to 1 decimal place).
+4. Assign 'band': "Junior" (1.0-3.9), "Mid" (4.0-6.4), "Senior" (6.5-8.4), or "Staff" (8.5-10.0).
+5. Extract top 2-3 key strengths and top 2-3 key technical gaps.
+
+Return ONLY the following JSON structure:
 {{
   "scores": {{
     "requirements": {{"score": 7, "comment": "..."}},
@@ -65,20 +89,28 @@ Return this exact JSON structure:
   }},
   "overall_score": 6.4,
   "band": "Mid",
-  "summary": "2-3 sentence overall summary",
-  "strengths": ["strength 1", "strength 2"],
-  "gaps": ["gap 1", "gap 2"]
+  "summary": "Concise 2-3 sentence overall evaluation of the design.",
+  "strengths": ["...", "..."],
+  "gaps": ["...", "..."]
 }}"""
 
-FOLLOWUP_PROMPT = """You are a staff engineer interviewing a candidate about their {problem} design.
+FOLLOWUP_PROMPT = """You are a Staff Engineer interviewing a candidate about their design for: "{problem}".
 
-Evaluation summary: {summary}
-Identified gaps: {gaps}
+EVALUATION SUMMARY: {summary}
+IDENTIFIED GAPS: {gaps}
 
-Generate exactly 3 probing follow-up questions targeting the weakest areas. Be specific and technical.
+TASK:
+Generate exactly 3 deep-dive, probing follow-up questions targeting the specific technical gaps identified.
+Requirements for questions:
+- Focus on practical trade-offs, failure modes, data consistency, or scaling bottlenecks.
+- Be concrete and specific to the candidate's architecture (avoid generic questions like "How would you monitor this?").
 
-Return ONLY a JSON array of 3 strings:
-["Question one?", "Question two?", "Question three?"]"""
+Return ONLY a JSON array containing exactly 3 strings:
+[
+  "Probing technical question 1...",
+  "Probing technical question 2...",
+  "Probing technical question 3..."
+]"""
 
 @router.post("/evaluate")
 async def evaluate_design(data: DesignInput):
@@ -92,7 +124,7 @@ async def evaluate_design(data: DesignInput):
     )
     try:
         resp = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
